@@ -10,33 +10,27 @@ permissions:
   id-token: write
 
 jobs:
-  docker-build:
-    name: Build with Docker
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-
-      - run: git submodule update --init moby
-
-      - uses: docker/setup-qemu-action@v2
-
-      - uses: docker/setup-buildx-action@v2
-
-      - uses: docker/build-push-action@v4
-        with:
-          context: ./moby
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   nscloud-build:
     name: Build with Namespace
     runs-on: ubuntu-20.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout myrepo
+        uses: actions/checkout@v3
 
-      - run: git submodule update --init moby
+      - name: Cache Submodules
+        id: cache-submodule
+        uses: actions/cache@v3
+        with:
+          path: |
+            moby
+          key: ${{ runner.os }}-submodules
+
+      - name: Update git submodules
+        if: steps.cache-submodule.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - uses: namespacelabs/nscloud-setup@v0
 
@@ -50,28 +44,3 @@ jobs:
         with:
           context: ./moby
           platforms: linux/amd64,linux/arm64
-
-  notify-failures:
-    name: Notify on build failures
-    needs:
-      - docker-build
-      - nscloud-build
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    if: failure() && needs.docker-build.result == 'success' && needs.nscloud-build.result == 'failure'
-    steps:
-      - uses: ruby/action-slack@v3.2.1
-        with:
-          payload: |
-            {
-              "attachments": [{
-                "title": "Namespace build failed while Docker build passed! Check now: ${{ job.status }}: ${{ github.workflow }}",
-                "title_link": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "text": "See the link",
-                "fields": [],
-                "footer": "",
-                "color": "danger"
-              }]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
