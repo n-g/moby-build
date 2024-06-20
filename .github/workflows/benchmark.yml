@@ -2,8 +2,6 @@ name: Moby Benchmark
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: "33 02 * * *"
 
 permissions:
   contents: read
